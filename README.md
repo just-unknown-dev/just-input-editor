@@ -1,39 +1,49 @@
-<!--
-This README describes the package. If you publish this package to pub.dev,
-this README's contents appear on the landing page for your package.
+# Just Input Editor
 
-For information about how to write a good package README, see the guide for
-[writing package pages](https://dart.dev/tools/pub/writing-package-pages).
+The Input Actions editor: the visual side of
+[`just_inputs`](../just_inputs), the input core `just_game_engine` runs on.
 
-For general information about developing packages, see the Dart guide for
-[creating packages](https://dart.dev/guides/libraries/create-packages)
-and the Flutter guide for
-[developing packages and plugins](https://flutter.dev/to/develop-packages).
--->
+It edits a game's `.input.json` asset:
+- maps, actions and bindings, with undo;
+- binding a control by Pick, or by Listen (press the key or button);
+- interactions and processors;
+- control schemes and player settings (joining, up to four players);
+- on-screen controls.
 
-TODO: Put a short description of the package here that helps potential users
-know whether this package might be useful for them.
+A keyboard, a gamepad and a phone show every binding and let you click to bind. A live test shows the actions as you press.
 
-## Features
+## In the engine editor
 
-TODO: List what your package can do. Maybe include images, gifs, or videos.
-
-## Getting started
-
-TODO: List prerequisites and provide or point to information on how to
-start using the package.
-
-## Usage
-
-TODO: Include short and useful examples for package users. Add longer examples
-to `/example` folder.
+`InputEditorModule` puts the editor in `just_game_engine_editor` as a workspace. It adds three things:
+- **A toolbar button**: the pad button on the play toolbar, right after the Sprite Studio brush, which opens the game's controls.
+- **Asset actions**: "Edit input actions" on any `.input.json` in the Assets dock, and "New input actions" on folders under `assets/`.
+- **Live apply**: saving the game's asset loads it into the running engine (`engine.input.loadAsset`), during Play or not.
 
 ```dart
-const like = 'sample';
+import 'package:just_input_editor/just_input_editor.dart';
+
+await JustGameEditorPlugin.register(
+  engine: engine,
+  modules: [
+    InputEditorModule(assetPath: 'assets/input/game.input.json'),
+  ],
+);
 ```
 
-## Additional information
+## On its own
 
-TODO: Tell users more about the package: where to find more information, how to
-contribute to the package, how to file issues, what response they can expect
-from the package authors, and more.
+`InputEditor` is an ordinary widget, so any host can put it in a window:
+
+```dart
+InputEditor(
+  store: FileInputAssetStore(projectRoot),
+  path: 'assets/input/game.input.json',
+  onSaved: (asset, path) => engine.input.loadAsset(asset),
+);
+```
+
+## Never in a game
+
+The whole package is design-time only. A game imports `just_inputs` (through `just_game_engine`), never this. Only the editor entry point (`lib/main_editor.dart` in the platformer template) imports it, so none of it reaches a release build.
+
+The game's in-game input widgets stay in `just_inputs`, because they ship: `OnScreenControls`, and the rebinding UI (`RebindList`, `RebindButton`, `BindingLabel`).

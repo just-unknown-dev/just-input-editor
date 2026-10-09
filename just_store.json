@@ -1,0 +1,26 @@
+{
+  "category": "editors",
+  "dependencies": {
+    "just_game_engine_editor": "^0.1.0"
+  },
+  "editor": {
+    "editorOnlyLibraries": [
+      "*"
+    ],
+    "modules": [
+      {
+        "class": "InputEditorModule",
+        "library": "package:just_input_editor/just_input_editor.dart",
+        "order": 30
+      }
+    ]
+  },
+  "id": "just_input_editor",
+  "kind": "editor-extension",
+  "name": "Input Actions",
+  "requires": {
+    "just_game_engine": "^2.0.0"
+  },
+  "schema": 1,
+  "version": "0.1.0"
+}
