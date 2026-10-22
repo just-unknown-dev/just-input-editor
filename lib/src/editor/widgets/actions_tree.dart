@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:just_editor_core/just_editor_core.dart' show EditorKeys;
 
 import 'package:just_inputs/just_inputs.dart';
 import '../core/asset_edits.dart';
@@ -110,7 +111,11 @@ class _ActionsTreeState extends State<ActionsTree> {
   ) async {
     final choice = await showEditorMenu<String>(context, at, [
       editorMenuItem('rename', Icons.edit_outlined, 'Rename  (F2)'),
-      editorMenuItem('duplicate', Icons.copy_outlined, 'Duplicate  (Ctrl+D)'),
+      editorMenuItem(
+        'duplicate',
+        Icons.copy_outlined,
+        'Duplicate  (${EditorKeys.withPrimary('D')})',
+      ),
       editorMenuItem('delete', Icons.delete_outline, 'Delete  (Del)'),
     ]);
     if (!context.mounted) return;
@@ -150,7 +155,11 @@ class _ActionsTreeState extends State<ActionsTree> {
         : const <String>[];
     final choice = await showEditorMenu<String>(context, at, [
       if (ref.part == null)
-        editorMenuItem('duplicate', Icons.copy_outlined, 'Duplicate  (Ctrl+D)'),
+        editorMenuItem(
+          'duplicate',
+          Icons.copy_outlined,
+          'Duplicate  (${EditorKeys.withPrimary('D')})',
+        ),
       for (final p in parts)
         editorMenuItem('part:$p', Icons.add, 'Another "$p"'),
       editorMenuItem(

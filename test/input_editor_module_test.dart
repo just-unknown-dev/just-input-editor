@@ -6,7 +6,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_game_engine/just_game_engine.dart';
-import 'package:just_game_engine_editor/just_game_engine_editor.dart';
+import 'package:just_editor_core/just_editor_core.dart';
 import 'package:just_input_editor/just_input_editor.dart';
 import 'package:just_inputs/testing.dart';
 

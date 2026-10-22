@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:just_editor_core/just_editor_core.dart' show EditorKeys;
 
 import 'package:just_inputs/just_inputs.dart';
 import '../core/asset_edits.dart';
@@ -196,7 +197,7 @@ class InputEditorState extends State<InputEditor> {
     }
     final key = event.logicalKey;
     final keys = HardwareKeyboard.instance;
-    final ctrl = keys.isControlPressed || keys.isMetaPressed;
+    final ctrl = EditorKeys.primaryPressed;
     final shift = keys.isShiftPressed;
     if (ctrl && key == LogicalKeyboardKey.keyS) {
       save();
@@ -208,7 +209,7 @@ class InputEditorState extends State<InputEditor> {
       if (s.canUndo) s.undo();
     } else if (ctrl && key == LogicalKeyboardKey.keyD) {
       _duplicate(s);
-    } else if (key == LogicalKeyboardKey.delete) {
+    } else if (EditorKeys.isDeleteKey(key)) {
       _delete(s);
     } else if (key == LogicalKeyboardKey.f2) {
       _rename(s);
@@ -423,14 +424,14 @@ class _TopBar extends StatelessWidget {
           EditorIconButton(
             icon: Icons.undo,
             tooltip: s.canUndo
-                ? 'Undo ${s.undoLabel}  (Ctrl+Z)'
+                ? 'Undo ${s.undoLabel}  (${EditorKeys.withPrimary('Z')})'
                 : 'Nothing to undo',
             onTap: s.canUndo ? s.undo : null,
           ),
           EditorIconButton(
             icon: Icons.redo,
             tooltip: s.canRedo
-                ? 'Redo ${s.redoLabel}  (Ctrl+Y)'
+                ? 'Redo ${s.redoLabel}  (${EditorKeys.withPrimary('Y')})'
                 : 'Nothing to redo',
             onTap: s.canRedo ? s.redo : null,
           ),

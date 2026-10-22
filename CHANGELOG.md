@@ -1,5 +1,7 @@
 ## 0.1.0
 
+- **Builds on `just_editor_core`**, the editor's module contract, instead of depending on `just_game_engine_editor`: the module's code needs nothing else of the editor.
+
 First version. The Input Actions editor moved here from `just_inputs`, and its module moved here from the platformer template.
 
 - **Esc puts back what was typed** in a text field (`EditorTextField`), which, as everywhere in the editor, keeps it on Enter or on leaving the field — Tab, a click elsewhere. With nothing typed, Esc is left to whatever else wants it.

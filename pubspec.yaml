@@ -2,8 +2,8 @@ name: just_input_editor
 description: "The Input Actions editor for just_inputs: maps, actions and bindings; keyboard, gamepad and touch views; a live test; and the module that puts it in just_game_engine_editor."
 version: 0.1.0
 homepage: https://engine.justunknown.com/
-repository: https://github.com/just-unknown-dev/just-gamepads
-issue_tracker: https://github.com/just-unknown-dev/just-gamepads/issues
+repository: https://github.com/just-unknown-dev/just-input-editor
+issue_tracker: https://github.com/just-unknown-dev/just-input-editor/issues
 
 environment:
   # just_inputs needs 3.12 (private named initializing formals).
@@ -16,7 +16,7 @@ dependencies:
 
   # The input core this edits: assets, actions, devices, players. The game
   # depends on it through just_game_engine; this package only shows it.
-  just_inputs: ^0.0.1
+  just_inputs: ^0.1.0
 
   # The gamepad view names a pad's type (Xbox, PlayStation, ...), which
   # just_inputs does not re-export.
@@ -25,7 +25,7 @@ dependencies:
   # The editor this plugs into, as a module. Design-time only: the whole
   # package is, so a game never imports any of it.
   just_game_engine: ^2.0.0
-  just_game_engine_editor: ^0.1.0
+  just_editor_core: ^0.1.0-dev.1
 
 dev_dependencies:
   flutter_test:

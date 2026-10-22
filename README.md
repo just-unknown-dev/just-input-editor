@@ -1,7 +1,6 @@
 # Just Input Editor
 
-The Input Actions editor: the visual side of
-[`just_inputs`](../just_inputs), the input core `just_game_engine` runs on.
+The Input Actions editor: the visual side of [`just_inputs`](../just_inputs), the input core `just_game_engine` runs on.
 
 It edits a game's `.input.json` asset:
 - maps, actions and bindings, with undo;

@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:just_game_engine_editor/just_game_engine_editor.dart'
+import 'package:just_editor_core/just_editor_core.dart'
     show PackageAssetPaths;
 import 'package:just_inputs/just_inputs.dart';
 

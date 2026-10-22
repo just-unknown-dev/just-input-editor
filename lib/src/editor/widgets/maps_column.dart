@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:just_editor_core/just_editor_core.dart' show EditorKeys;
 
 import 'package:just_inputs/just_inputs.dart';
 import '../core/asset_edits.dart';
@@ -35,7 +36,11 @@ class MapsColumn extends StatelessWidget {
   Future<void> _menu(BuildContext context, Offset at, ActionMapDef map) async {
     final choice = await showEditorMenu<String>(context, at, [
       editorMenuItem('rename', Icons.edit_outlined, 'Rename  (F2)'),
-      editorMenuItem('duplicate', Icons.copy_outlined, 'Duplicate  (Ctrl+D)'),
+      editorMenuItem(
+        'duplicate',
+        Icons.copy_outlined,
+        'Duplicate  (${EditorKeys.withPrimary('D')})',
+      ),
       editorMenuItem('delete', Icons.delete_outline, 'Delete'),
     ]);
     if (!context.mounted) return;
