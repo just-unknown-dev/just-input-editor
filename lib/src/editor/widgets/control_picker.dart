@@ -102,7 +102,7 @@ class _ControlPickerState extends State<_ControlPicker> {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14),
           child: EditorTextField(
-            value: '',
+            value: _query,
             hint: 'Search: space, stick, trigger…',
             autofocus: true,
             onChanged: (v) => setState(() => _query = v),

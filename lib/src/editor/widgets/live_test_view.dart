@@ -24,17 +24,29 @@ class _LiveTestViewState extends State<LiveTestView>
     with SingleTickerProviderStateMixin {
   late final Ticker _ticker;
   final FocusNode _focus = FocusNode(debugLabel: 'LiveTest');
+  Duration _last = Duration.zero;
 
   @override
   void initState() {
     super.initState();
+    widget.harness.live = true;
     _ticker = createTicker(_tick)..start();
   }
 
   void _tick(Duration elapsed) {
     // The ticker's time, never the wall clock: holds and taps run on it.
-    widget.harness.service.update(elapsed.inMicroseconds / 1e6);
+    // Only how far it moved: a new ticker starts at zero again, and the
+    // harness's clock goes on from where it was.
+    final step = elapsed - _last;
+    _last = elapsed;
+    widget.harness.advance(step.inMicroseconds / 1e6);
     if (mounted) setState(() {});
+  }
+
+  /// Keys go to the test only while the area has them; whatever was held
+  /// when they went elsewhere is let go, as a game's window losing focus.
+  void _focusChanged(bool focused) {
+    if (!focused) widget.harness.service.releaseKeyboard();
   }
 
   @override
@@ -42,7 +54,9 @@ class _LiveTestViewState extends State<LiveTestView>
     _ticker.dispose();
     _focus.dispose();
     // Nothing stays held once the tab is closed.
-    widget.harness.service.releaseKeyboard();
+    widget.harness
+      ..live = false
+      ..service.releaseKeyboard();
     super.dispose();
   }
 
@@ -72,41 +86,49 @@ class _LiveTestViewState extends State<LiveTestView>
                 Expanded(
                   child: Focus(
                     focusNode: _focus,
+                    onFocusChange: _focusChanged,
+                    // Every key, Escape and the editor's shortcuts too: a
+                    // game binds them. A click anywhere else gives them back.
                     onKeyEvent: (node, event) {
                       service.handleKeyEvent(event);
                       return KeyEventResult.handled;
                     },
                     child: ListenableBuilder(
                       listenable: _focus,
-                      builder: (context, _) => Listener(
-                        key: const ValueKey('live-area'),
-                        onPointerDown: (e) {
-                          _focus.requestFocus();
-                          service.handlePointerEvent(e);
+                      builder: (context, _) => TapRegion(
+                        onTapOutside: (_) {
+                          if (_focus.hasFocus) _focus.unfocus();
                         },
-                        onPointerUp: service.handlePointerEvent,
-                        onPointerMove: service.handlePointerEvent,
-                        onPointerHover: service.handlePointerEvent,
-                        onPointerSignal: service.handlePointerEvent,
-                        child: Container(
-                          alignment: Alignment.center,
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: InputEditorTheme.field,
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(
-                              color: _focus.hasFocus
-                                  ? InputEditorTheme.accent
-                                  : InputEditorTheme.border,
-                              width: _focus.hasFocus ? 2 : 1,
+                        child: Listener(
+                          key: const ValueKey('live-area'),
+                          onPointerDown: (e) {
+                            _focus.requestFocus();
+                            service.handlePointerEvent(e);
+                          },
+                          onPointerUp: service.handlePointerEvent,
+                          onPointerMove: service.handlePointerEvent,
+                          onPointerHover: service.handlePointerEvent,
+                          onPointerSignal: service.handlePointerEvent,
+                          child: Container(
+                            alignment: Alignment.center,
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: InputEditorTheme.field,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: _focus.hasFocus
+                                    ? InputEditorTheme.accent
+                                    : InputEditorTheme.border,
+                                width: _focus.hasFocus ? 2 : 1,
+                              ),
                             ),
-                          ),
-                          child: Text(
-                            _focus.hasFocus
-                                ? 'Listening: keys, mouse and pads go to the test.'
-                                : 'Click here, then use the keyboard and mouse. Pads work any time.',
-                            textAlign: TextAlign.center,
-                            style: InputEditorTheme.bodyMuted,
+                            child: Text(
+                              _focus.hasFocus
+                                  ? 'Listening: keys, mouse and pads go to the test. Click outside to stop.'
+                                  : 'Click here, then use the keyboard and mouse. Pads work any time.',
+                              textAlign: TextAlign.center,
+                              style: InputEditorTheme.bodyMuted,
+                            ),
                           ),
                         ),
                       ),

@@ -44,18 +44,43 @@ class InputEditorPalette {
     ok: Color(0xFF7DE6B1),
   );
 
+  /// Behind everything: the editor's window.
   final Color background;
+
+  /// The panels: maps, properties, the bars.
   final Color panel;
+
+  /// What sits on a panel: a step's card, a menu.
   final Color panelRaised;
+
+  /// Inside a text field.
   final Color field;
+
+  /// Lines between things.
   final Color border;
+
+  /// Behind the keyboard, pad and phone pictures.
   final Color workArea;
+
+  /// Text.
   final Color text;
+
+  /// Text that says less: hints, labels.
   final Color textMuted;
+
+  /// What is chosen or active, and the host's accent.
   final Color accent;
+
+  /// Behind a selected row.
   final Color selected;
+
+  /// Errors and deleting.
   final Color danger;
+
+  /// Warnings: a shared control, an unknown value.
   final Color warning;
+
+  /// What worked: a performed action.
   final Color ok;
 }
 
@@ -306,12 +331,28 @@ class _EditorTextFieldState extends State<EditorTextField> {
     }
   }
 
+  /// What was last handed to [EditorTextField.onCommit] — so Enter, which
+  /// commits and then takes the focus away, commits once and not twice.
+  String? _committed;
+
   void _onFocus() {
     if (!_focus.hasFocus) _commit();
   }
 
   void _commit() {
-    if (_text.text != widget.value) widget.onCommit(_text.text);
+    final text = _text.text;
+    if (text == widget.value || text == _committed) return;
+    _committed = text;
+    widget.onCommit(text);
+    // Once the owner has rebuilt: a commit it refused (an empty name)
+    // left its value as it was, and the field shows that again.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _committed = null;
+      if (mounted && !_focus.hasFocus && _text.text != widget.value) {
+        _text.text = widget.value;
+      }
+    });
+    WidgetsBinding.instance.ensureVisualUpdate();
   }
 
   /// Esc, with a change typed: what was there, and out of the field. With

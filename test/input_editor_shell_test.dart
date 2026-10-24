@@ -37,7 +37,10 @@ void main() {
         home: InputEditor(
           store: store,
           path: path,
-          onSaved: (asset, path) => saved.add('$path:${asset.name}'),
+          onSaved: (asset, path) {
+            saved.add('$path:${asset.name}');
+            return null;
+          },
           onClose: () => closed++,
         ),
       ),

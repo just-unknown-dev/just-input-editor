@@ -15,8 +15,162 @@ abstract final class AssetEdits {
     return '$base$i';
   }
 
+  /// What a map or action name may be: what code can ask for, the same rule
+  /// `validateAsset` checks.
+  static final RegExp namePattern = RegExp(r'^[A-Za-z_][A-Za-z0-9_]*$');
+
+  /// Why [name] cannot be the name of the action [actionId] — empty, not
+  /// letters, digits and `_`, or another action of its map has it — or null
+  /// when it can.
+  static String? actionNameProblem(
+    InputActionAsset a,
+    String actionId,
+    String name,
+  ) {
+    final ref = a.actionById(actionId);
+    if (ref == null) return null;
+    if (name.isEmpty) return 'An action needs a name.';
+    if (!namePattern.hasMatch(name)) {
+      return '"$name" is not a name: letters, digits and _, not starting '
+          'with a digit.';
+    }
+    if (ref.map.actions.any((x) => x.id != actionId && x.name == name)) {
+      return '"${ref.map.name}" already has an action called "$name".';
+    }
+    return null;
+  }
+
+  /// Why [name] cannot be the name of the map [mapId], or null when it can.
+  static String? mapNameProblem(InputActionAsset a, String mapId, String name) {
+    if (name.isEmpty) return 'A map needs a name.';
+    if (!namePattern.hasMatch(name)) {
+      return '"$name" is not a name: letters, digits and _, not starting '
+          'with a digit.';
+    }
+    if (a.maps.any((m) => m.id != mapId && m.name == name)) {
+      return 'There is already a map called "$name".';
+    }
+    return null;
+  }
+
+  /// [a] with its ids put right, and what was wrong — null when nothing was:
+  /// a `nextId` that is not past every id in the file (a hand edit, a merge)
+  /// moves past them, and an id used twice is given a new one where it
+  /// comes again. Without this, the next id made could land on an old one.
+  static (InputActionAsset, String)? repairIds(InputActionAsset a) {
+    var highest = 0;
+    void see(String id) {
+      final n = int.tryParse(id.replaceFirst(RegExp(r'^[A-Za-z]+'), ''));
+      if (n != null && n > highest) highest = n;
+    }
+
+    for (final m in a.maps) {
+      see(m.id);
+      for (final x in m.actions) {
+        see(x.id);
+        for (final b in x.bindings) {
+          see(b.id);
+          if (b is CompositeBindingDef) {
+            for (final p in b.parts) {
+              see(p.id);
+            }
+          }
+        }
+      }
+    }
+    final moved = highest >= a.nextId;
+    var next = moved ? a.copyWith(nextId: highest + 1) : a;
+
+    final seen = <String>{};
+    var renumbered = 0;
+    String fresh(String id, String fallback) {
+      if (seen.add(id)) return id;
+      renumbered++;
+      final prefix = RegExp(r'^[A-Za-z]+').stringMatch(id) ?? fallback;
+      final (made, after) = next.takeId(prefix);
+      next = after;
+      seen.add(made);
+      return made;
+    }
+
+    final maps = <ActionMapDef>[];
+    for (final m in next.maps) {
+      final mapId = fresh(m.id, 'm');
+      final actions = <InputActionDef>[];
+      for (final x in m.actions) {
+        final actionId = fresh(x.id, 'a');
+        final bindings = <InputBindingDef>[];
+        for (final b in x.bindings) {
+          final bindingId = fresh(b.id, 'b');
+          bindings.add(switch (b) {
+            ControlBindingDef() =>
+              bindingId == b.id
+                  ? b
+                  : ControlBindingDef(
+                      id: bindingId,
+                      path: b.path,
+                      groups: b.groups,
+                      interactions: b.interactions,
+                      processors: b.processors,
+                    ),
+            CompositeBindingDef() => CompositeBindingDef(
+              id: bindingId,
+              composite: b.composite,
+              name: b.name,
+              params: b.params,
+              groups: b.groups,
+              interactions: b.interactions,
+              processors: b.processors,
+              parts: [
+                for (final p in b.parts)
+                  switch (fresh(p.id, 'b')) {
+                    final partId when partId == p.id => p,
+                    final partId => CompositePartDef(
+                      id: partId,
+                      part: p.part,
+                      path: p.path,
+                      processors: p.processors,
+                    ),
+                  },
+              ],
+            ),
+          });
+        }
+        actions.add(
+          InputActionDef(
+            id: actionId,
+            name: x.name,
+            type: x.type,
+            passThrough: x.passThrough,
+            displayName: x.displayName,
+            rebindable: x.rebindable,
+            interactions: x.interactions,
+            processors: x.processors,
+            bindings: bindings,
+          ),
+        );
+      }
+      maps.add(
+        ActionMapDef(
+          id: mapId,
+          name: m.name,
+          enabled: m.enabled,
+          actions: actions,
+        ),
+      );
+    }
+    if (!moved && renumbered == 0) return null;
+    final said = [
+      if (moved) 'nextId was behind the ids in the file',
+      if (renumbered > 0)
+        '$renumbered id${renumbered == 1 ? ' was' : 's were'} used twice',
+    ];
+    return (next.copyWith(maps: maps), '${said.join(', and ')}: put right.');
+  }
+
   // --- Maps ------------------------------------------------------------------
 
+  /// A new, empty map called [name] (or `name2`… when taken), and its id.
   static (InputActionAsset, String) addMap(
     InputActionAsset a, {
     String name = 'map',
@@ -29,6 +183,8 @@ abstract final class AssetEdits {
     return (next.copyWith(maps: [...next.maps, map]), id);
   }
 
+  /// The map called [name] from now on; the join actions follow. A name
+  /// [mapNameProblem] refuses changes nothing.
   static InputActionAsset renameMap(
     InputActionAsset a,
     String mapId,
@@ -36,6 +192,7 @@ abstract final class AssetEdits {
   ) {
     final map = a.mapById(mapId);
     if (map == null || map.name == name) return a;
+    if (mapNameProblem(a, mapId, name) != null) return a;
     return _renameJoinPaths(
       _updateMap(a, mapId, (m) => m.copyWith(name: name)),
       (path) => path.startsWith('${map.name}/')
@@ -44,12 +201,14 @@ abstract final class AssetEdits {
     );
   }
 
+  /// Whether the map is on when the game starts.
   static InputActionAsset setMapEnabled(
     InputActionAsset a,
     String mapId,
     bool enabled,
   ) => _updateMap(a, mapId, (m) => m.copyWith(enabled: enabled));
 
+  /// The map gone, with its actions and any join action among them.
   static InputActionAsset deleteMap(InputActionAsset a, String mapId) {
     final map = a.mapById(mapId);
     if (map == null) return a;
@@ -64,6 +223,8 @@ abstract final class AssetEdits {
     );
   }
 
+  /// A copy of the map after it, with fresh ids all the way down, and the
+  /// copy's id.
   static (InputActionAsset, String) duplicateMap(
     InputActionAsset a,
     String mapId,
@@ -87,6 +248,7 @@ abstract final class AssetEdits {
     return (next.copyWith(maps: [...next.maps]..insert(index + 1, copy)), id);
   }
 
+  /// The map at [index] of the list, counted once it has left its place.
   static InputActionAsset moveMap(InputActionAsset a, String mapId, int index) {
     final maps = [...a.maps];
     final from = maps.indexWhere((m) => m.id == mapId);
@@ -98,6 +260,8 @@ abstract final class AssetEdits {
 
   // --- Actions ------------------------------------------------------------
 
+  /// A new action of [type] at the end of the map, called [name] (or
+  /// `name2`…), and its id — empty when there is no such map.
   static (InputActionAsset, String) addAction(
     InputActionAsset a,
     String mapId, {
@@ -122,6 +286,7 @@ abstract final class AssetEdits {
     );
   }
 
+  /// The action with [actionId] as [change] makes it.
   static InputActionAsset updateAction(
     InputActionAsset a,
     String actionId,
@@ -139,6 +304,8 @@ abstract final class AssetEdits {
     ],
   );
 
+  /// The action called [name] from now on; a join action naming it
+  /// follows. A name [actionNameProblem] refuses changes nothing.
   static InputActionAsset renameAction(
     InputActionAsset a,
     String actionId,
@@ -146,6 +313,7 @@ abstract final class AssetEdits {
   ) {
     final ref = a.actionById(actionId);
     if (ref == null || ref.action.name == name) return a;
+    if (actionNameProblem(a, actionId, name) != null) return a;
     final old = ref.path;
     return _renameJoinPaths(
       updateAction(a, actionId, (x) => x.copyWith(name: name)),
@@ -153,6 +321,7 @@ abstract final class AssetEdits {
     );
   }
 
+  /// The action gone, with its bindings — and from the join actions.
   static InputActionAsset deleteAction(InputActionAsset a, String actionId) {
     final ref = a.actionById(actionId);
     if (ref == null) return a;
@@ -173,6 +342,8 @@ abstract final class AssetEdits {
     );
   }
 
+  /// A copy of the action after it, with a free name and fresh ids, and
+  /// the copy's id.
   static (InputActionAsset, String) duplicateAction(
     InputActionAsset a,
     String actionId,
@@ -237,6 +408,24 @@ abstract final class AssetEdits {
         : inserted;
   }
 
+  /// Moves an action, within its map, to just before [beforeId] — where a
+  /// row dropped on another lands, whichever way it moved.
+  static InputActionAsset moveActionBefore(
+    InputActionAsset a,
+    String actionId,
+    String beforeId,
+  ) {
+    final ref = a.actionById(actionId);
+    if (ref == null || actionId == beforeId) return a;
+    final actions = ref.map.actions;
+    final from = actions.indexWhere((x) => x.id == actionId);
+    var index = actions.indexWhere((x) => x.id == beforeId);
+    if (index < 0) return a;
+    // Once it has left its place, everything after it is one further up.
+    if (from < index) index--;
+    return moveAction(a, actionId, index: index);
+  }
+
   /// Changes what the action reads out. Composites that make the wrong kind
   /// of value go; single controls stay, for validation to flag.
   static InputActionAsset changeActionType(
@@ -266,6 +455,7 @@ abstract final class AssetEdits {
 
   // --- Bindings -------------------------------------------------------------
 
+  /// A new single-control binding at the end of the action, and its id.
   static (InputActionAsset, String) addBinding(
     InputActionAsset a,
     String actionId, {
@@ -349,6 +539,7 @@ abstract final class AssetEdits {
     InputBindingDef Function(InputBindingDef binding) change,
   ) => _mapBindings(a, (b) => b.id == bindingId ? change(b) : b);
 
+  /// The composite part with [partId] as [change] makes it.
   static InputActionAsset updatePart(
     InputActionAsset a,
     String partId,
@@ -376,6 +567,7 @@ abstract final class AssetEdits {
     );
   }
 
+  /// The schemes (by group) a binding counts in; none is every scheme.
   static InputActionAsset setGroups(
     InputActionAsset a,
     String bindingId,
@@ -417,6 +609,8 @@ abstract final class AssetEdits {
     );
   }
 
+  /// A copy of the binding (not a part) after it, with fresh ids, and the
+  /// copy's id.
   static (InputActionAsset, String) duplicateBinding(
     InputActionAsset a,
     String bindingId,
@@ -435,6 +629,8 @@ abstract final class AssetEdits {
     );
   }
 
+  /// The binding at [index] of its action's list, counted once it has left
+  /// its place.
   static InputActionAsset moveBinding(
     InputActionAsset a,
     String bindingId,
@@ -498,6 +694,8 @@ abstract final class AssetEdits {
 
   // --- On-screen controls ---------------------------------------------------
 
+  /// A new on-screen button or stick in the middle of the screen, and its
+  /// id.
   static (InputActionAsset, String) addOnScreen(
     InputActionAsset a,
     OnScreenKind kind,
@@ -543,22 +741,38 @@ abstract final class AssetEdits {
     return asset;
   }
 
-  static InputActionAsset deleteOnScreen(InputActionAsset a, String id) =>
+  /// The on-screen control gone. Bindings that named it — or one of its
+  /// directions — are left unbound rather than naming nothing.
+  static InputActionAsset deleteOnScreen(InputActionAsset a, String id) {
+    if (a.onScreenControl(id) == null) return a;
+    return _rewritePaths(
       a.copyWith(
         onScreen: [
           for (final c in a.onScreen)
             if (c.id != id) c,
         ],
-      );
+      ),
+      (path) => namesOnScreen(path, id) ? '' : path,
+    );
+  }
+
+  /// Whether [path] is the on-screen control [id], or a part of it.
+  static bool namesOnScreen(String path, String id) {
+    final p = ControlPath.tryParse(path);
+    return p != null && p.layout == InputLayouts.onScreen && p.root == id;
+  }
 
   // --- Schemes and settings -----------------------------------------------
 
+  /// [scheme] added at the end.
   static InputActionAsset addScheme(
     InputActionAsset a,
     ControlSchemeDef scheme,
   ) => a.copyWith(schemes: [...a.schemes, scheme]);
 
   /// Changes a scheme. A new group is followed by every binding in the old.
+  /// A group another scheme already has changes nothing: the two schemes'
+  /// bindings would run together, past telling apart.
   static InputActionAsset updateScheme(
     InputActionAsset a,
     String name,
@@ -567,6 +781,10 @@ abstract final class AssetEdits {
     final old = a.schemeNamed(name);
     if (old == null) return a;
     final next = change(old);
+    if (next.group != old.group &&
+        a.schemes.any((s) => s.name != name && s.group == next.group)) {
+      return a;
+    }
     var asset = a.copyWith(
       schemes: [for (final s in a.schemes) s.name == name ? next : s],
     );

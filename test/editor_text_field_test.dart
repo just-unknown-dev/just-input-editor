@@ -49,6 +49,29 @@ void main() {
     expect(kept, ['leap']);
   }, variant: _desktop);
 
+  testWidgets('Enter keeps it once, though it also leaves the field', (
+    tester,
+  ) async {
+    final field = await pump(tester);
+    await tester.enterText(field, 'leap');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+    expect(kept, ['leap']);
+  }, variant: _desktop);
+
+  testWidgets('a value its owner kept as it was shows again', (tester) async {
+    final field = await pump(tester);
+    await tester.enterText(field, 'leap');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+    await tester.pump();
+    expect(
+      tester.widget<TextField>(field).controller!.text,
+      'jump',
+      reason: 'the owner here never takes the new value',
+    );
+  }, variant: _desktop);
+
   testWidgets('Esc puts back what was there and keeps nothing', (tester) async {
     final field = await pump(tester);
     await tester.enterText(field, 'leap');

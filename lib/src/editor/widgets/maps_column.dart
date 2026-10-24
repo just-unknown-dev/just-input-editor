@@ -3,6 +3,7 @@ import 'package:just_editor_core/just_editor_core.dart' show EditorKeys;
 
 import 'package:just_inputs/just_inputs.dart';
 import '../core/asset_edits.dart';
+import '../core/checked_edits.dart';
 import '../core/input_editor_session.dart';
 import 'editor_theme.dart';
 
@@ -21,11 +22,8 @@ class MapsColumn extends StatelessWidget {
       initial: map.name,
       action: 'Rename',
     );
-    if (name == null || name.trim().isEmpty) return;
-    session.edit(
-      'Rename map',
-      (a) => AssetEdits.renameMap(a, map.id, name.trim()),
-    );
+    if (name == null) return;
+    await CheckedEdits.renameMap(session, map.id, name);
   }
 
   void _add() {
@@ -54,7 +52,7 @@ class MapsColumn extends StatelessWidget {
         );
         session.selectMap(id);
       case 'delete':
-        session.edit('Delete map', (a) => AssetEdits.deleteMap(a, map.id));
+        await CheckedEdits.deleteMap(session, map.id);
     }
   }
 
@@ -104,15 +102,8 @@ class MapsColumn extends StatelessWidget {
                     on ? 'Map on at start' : 'Map off at start',
                     (a) => AssetEdits.setMapEnabled(a, map.id, on),
                   ),
-                  onDropAction: (actionId) => session.edit(
-                    'Move action to ${map.name}',
-                    (a) => AssetEdits.moveAction(
-                      a,
-                      actionId,
-                      toMapId: map.id,
-                      index: map.actions.length,
-                    ),
-                  ),
+                  onDropAction: (actionId) =>
+                      CheckedEdits.moveActionToMap(session, actionId, map.id),
                 );
               },
             ),

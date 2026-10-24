@@ -11,6 +11,7 @@ library;
 export 'src/editor/core/asset_edits.dart';
 export 'src/editor/core/asset_store.dart';
 export 'src/editor/core/input_editor_session.dart';
+export 'src/editor/core/input_references.dart';
 export 'src/editor/core/starter_asset.dart';
 export 'src/editor/widgets/editor_harness.dart';
 export 'src/editor/widgets/editor_theme.dart'

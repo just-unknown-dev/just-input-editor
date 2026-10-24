@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -310,14 +311,12 @@ class _Placed extends StatelessWidget {
           for (final u in elsewhere) '${u.actionName} (${u.mapName})',
         ].join('\n'),
         waitDuration: const Duration(milliseconds: 300),
-        child: GestureDetector(
+        child: _Drag(
+          session: session,
           behavior: HitTestBehavior.opaque,
           onTap: onTap,
-          onPanStart: (_) {
-            onSelect();
-            session.beginGesture();
-          },
-          onPanUpdate: (e) {
+          onStart: onSelect,
+          onUpdate: (e) {
             // Read the latest position: each update moves from where the
             // last one left it.
             final now = session.asset.onScreenControl(control.id) ?? control;
@@ -327,7 +326,6 @@ class _Placed extends StatelessWidget {
               (at.dy / size.height * 2 - 1).clamp(-1.0, 1.0),
             );
           },
-          onPanEnd: (_) => session.endGesture(),
           child: Stack(
             clipBehavior: Clip.none,
             children: [
@@ -369,17 +367,16 @@ class _Placed extends StatelessWidget {
                 bottom: -6,
                 width: 14,
                 height: 14,
-                child: GestureDetector(
+                child: _Drag(
+                  session: session,
                   behavior: HitTestBehavior.opaque,
-                  onPanStart: (_) => session.beginGesture(),
-                  onPanUpdate: (e) {
+                  onUpdate: (e) {
                     final now =
                         session.asset.onScreenControl(control.id) ?? control;
                     final grown =
                         now.size * shortest + (e.delta.dx + e.delta.dy);
                     onSize((grown / shortest).clamp(0.05, 0.6));
                   },
-                  onPanEnd: (_) => session.endGesture(),
                   child: Container(
                     decoration: BoxDecoration(
                       color: selected
@@ -414,25 +411,36 @@ class _Region extends StatelessWidget {
   final InputEditorSession session;
   final ValueChanged<List<double>> onMove;
 
+  /// [region] as the screen can show it: inside it, left before right and
+  /// top before bottom — whatever a hand-edited file says.
+  static List<double> _within(List<double> region) {
+    double at(int i) => (region.length > i ? region[i] : (i < 2 ? 0.0 : 1.0))
+        .clamp(0.0, 1.0)
+        .toDouble();
+    final (l, t, r, b) = (at(0), at(1), at(2), at(3));
+    return [math.min(l, r), math.min(t, b), math.max(l, r), math.max(t, b)];
+  }
+
   @override
   Widget build(BuildContext context) {
-    final r = control.region;
+    final r = _within(control.region);
     return Positioned(
       left: r[0] * size.width,
       top: r[1] * size.height,
       width: (r[2] - r[0]) * size.width,
       height: (r[3] - r[1]) * size.height,
-      child: GestureDetector(
-        onPanStart: (_) => session.beginGesture(),
-        onPanUpdate: (e) {
-          final now = session.asset.onScreenControl(control.id)?.region ?? r;
+      child: _Drag(
+        session: session,
+        onUpdate: (e) {
+          final now = _within(
+            session.asset.onScreenControl(control.id)?.region ?? r,
+          );
           final dx = e.delta.dx / size.width, dy = e.delta.dy / size.height;
           final w = now[2] - now[0], h = now[3] - now[1];
           final left = (now[0] + dx).clamp(0.0, 1 - w);
           final top = (now[1] + dy).clamp(0.0, 1 - h);
           onMove([left, top, left + w, top + h]);
         },
-        onPanEnd: (_) => session.endGesture(),
         child: Container(
           decoration: BoxDecoration(
             color: InputEditorTheme.accent.withValues(
@@ -452,6 +460,68 @@ class _Region extends StatelessWidget {
       ),
     );
   }
+}
+
+/// A drag that is one undo step: the session's gesture begins with it and
+/// ends with it — or, when what is dragged goes away mid-drag (deleted,
+/// undone), with this, since no end of the drag is ever reported then.
+class _Drag extends StatefulWidget {
+  const _Drag({
+    required this.session,
+    required this.onUpdate,
+    required this.child,
+    this.onStart,
+    this.onTap,
+    this.behavior,
+  });
+
+  final InputEditorSession session;
+  final GestureDragUpdateCallback onUpdate;
+  final VoidCallback? onStart;
+  final VoidCallback? onTap;
+  final HitTestBehavior? behavior;
+  final Widget child;
+
+  @override
+  State<_Drag> createState() => _DragState();
+}
+
+class _DragState extends State<_Drag> {
+  bool _dragging = false;
+
+  void _end() {
+    if (!_dragging) return;
+    _dragging = false;
+    widget.session.endGesture();
+  }
+
+  @override
+  void dispose() {
+    if (_dragging) {
+      _dragging = false;
+      // Not while the tree is being taken down: the editor rebuilds on
+      // what the session says.
+      scheduleMicrotask(widget.session.endGesture);
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    behavior: widget.behavior,
+    onTap: widget.onTap,
+    onPanStart: (_) {
+      widget.onStart?.call();
+      if (!_dragging) {
+        _dragging = true;
+        widget.session.beginGesture();
+      }
+    },
+    onPanUpdate: widget.onUpdate,
+    onPanEnd: (_) => _end(),
+    onPanCancel: _end,
+    child: widget.child,
+  );
 }
 
 /// A hint of a level behind the controls.

@@ -86,7 +86,8 @@ void main() {
     );
     // The file is read for real: let real time pass until it is in.
     final state = tester.state<InputEditorState>(find.byType(InputEditor));
-    for (var i = 0; i < 50 && state.session == null; i++) {
+    // Up to 5 s: other test files share the disk while the suite runs.
+    for (var i = 0; i < 250 && state.session == null; i++) {
       await tester.runAsync(
         () => Future<void>.delayed(const Duration(milliseconds: 20)),
       );
@@ -111,5 +112,95 @@ void main() {
       () => FileInputAssetStore(root.path).load(path),
     );
     expect(onDisk!.findAction('player/jump')!.action.displayName, 'Hop');
+  });
+
+  group('during a play-test', () {
+    late Engine engine;
+    late Directory root;
+    late InputEditorModule module;
+    late EditorScope scope;
+
+    Future<void> boot(WidgetTester tester) async {
+      (engine, root) = (await tester.runAsync(() async {
+        final engine = Engine();
+        await engine.initialize();
+        engine.input.loadAsset(starterInputAsset());
+        final root = await Directory.systemTemp.createTemp('input_play');
+        return (engine, root);
+      }))!;
+      addTearDown(engine.dispose);
+      addTearDown(() {
+        try {
+          root.deleteSync(recursive: true);
+        } on FileSystemException catch (_) {}
+      });
+      module = InputEditorModule(
+        root: root.path,
+        gamepads: FakeGamepadSource(),
+      );
+      scope = EditorScope(engine: engine, modules: [module]);
+    }
+
+    InputActionAsset renamed(String name) {
+      final a = starterInputAsset();
+      final id = a.findAction('player/jump')!.action.id;
+      return AssetEdits.renameAction(a, id, name);
+    }
+
+    testWidgets('a save that takes an action away waits for Stop', (
+      tester,
+    ) async {
+      await boot(tester);
+      scope.isPlayTesting.value = true;
+      final note = module.apply(scope, renamed('hop'));
+      expect(note, contains('player/jump'));
+      expect(
+        engine.input.asset.findAction('player/jump'),
+        isNotNull,
+        reason: 'the running game still asks for it',
+      );
+
+      scope.isPlayTesting.value = false;
+      module.onPlayStateChanged(false);
+      expect(engine.input.asset.findAction('player/hop'), isNotNull);
+      expect(engine.input.asset.findAction('player/jump'), isNull);
+    });
+
+    testWidgets('one that only adds or changes goes in at once', (
+      tester,
+    ) async {
+      await boot(tester);
+      scope.isPlayTesting.value = true;
+      final a = starterInputAsset();
+      final id = a.findAction('player/jump')!.action.id;
+      final note = module.apply(
+        scope,
+        AssetEdits.updateAction(a, id, (x) => x.copyWith(displayName: 'Hop')),
+      );
+      expect(note, isNull);
+      expect(
+        engine.input.asset.findAction('player/jump')!.action.displayName,
+        'Hop',
+      );
+    });
+
+    testWidgets('the game\'s file changed on disk goes into the engine', (
+      tester,
+    ) async {
+      await boot(tester);
+      await tester.runAsync(
+        () => FileInputAssetStore(
+          root.path,
+        ).save(InputEditorModule.defaultAssetPath, renamed('leap')),
+      );
+      module.onAssetChanged(InputEditorModule.defaultAssetPath);
+      for (var i = 0; i < 250; i++) {
+        if (engine.input.asset.findAction('player/leap') != null) break;
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)),
+        );
+      }
+      expect(engine.input.asset.findAction('player/leap'), isNotNull);
+    });
   });
 }

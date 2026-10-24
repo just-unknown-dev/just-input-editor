@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:just_inputs/just_inputs.dart';
 import '../core/asset_edits.dart';
 import '../core/input_editor_session.dart';
+import '../core/checked_edits.dart';
 import 'control_picker.dart';
 import 'editor_harness.dart';
 import 'editor_theme.dart';
@@ -228,10 +229,7 @@ class _ActionProperties extends StatelessWidget {
           'Name',
           EditorTextField(
             value: a.name,
-            onCommit: (v) => s.edit(
-              'Rename action',
-              (x) => AssetEdits.renameAction(x, id, v.trim()),
-            ),
+            onCommit: (v) => CheckedEdits.renameAction(s, id, v),
           ),
         ),
         _Field(
@@ -1074,10 +1072,7 @@ class _OnScreenProperties extends StatelessWidget {
           Align(
             alignment: Alignment.centerLeft,
             child: TextButton.icon(
-              onPressed: () => s.edit(
-                'Delete on-screen control',
-                (a) => AssetEdits.deleteOnScreen(a, id),
-              ),
+              onPressed: () => CheckedEdits.deleteOnScreen(s, id),
               icon: Icon(
                 Icons.delete_outline,
                 size: 16,
@@ -1171,9 +1166,13 @@ class _SchemeProperties extends StatelessWidget {
               mono: true,
               onCommit: (v) {
                 final g = v.trim();
-                if (g.isNotEmpty) {
-                  update('Scheme group', (x) => x.copyWith(group: g));
+                if (g.isEmpty || g == scheme.group) return;
+                final other = s.asset.schemeWithGroup(g);
+                if (other != null) {
+                  s.say('"${other.name}" already uses the group "$g".');
+                  return;
                 }
+                update('Scheme group', (x) => x.copyWith(group: g));
               },
             ),
           ),
@@ -1281,17 +1280,23 @@ class _SettingsProperties extends StatelessWidget {
 
   final InputEditorSession session;
 
+  /// The most players the editor offers: what the templates' games have
+  /// room for, and what the README promises.
+  static const int maxPlayers = 4;
+
+  /// Each setting, its label, and the most it may be: a share of full
+  /// travel goes no further than 1; a time has no top.
   static const _settingFields = [
-    ('pressPoint', 'Press point'),
-    ('releaseRatio', 'Release at'),
-    ('holdTime', 'Hold time'),
-    ('tapTime', 'Tap time'),
-    ('slowTapTime', 'Slow tap'),
-    ('multiTapDelay', 'Multi-tap gap'),
-    ('stickDeadzoneMin', 'Stick dead min'),
-    ('stickDeadzoneMax', 'Stick dead max'),
-    ('axisDeadzoneMin', 'Axis dead min'),
-    ('axisDeadzoneMax', 'Axis dead max'),
+    ('pressPoint', 'Press point', 1.0),
+    ('releaseRatio', 'Release at', 1.0),
+    ('holdTime', 'Hold time', double.infinity),
+    ('tapTime', 'Tap time', double.infinity),
+    ('slowTapTime', 'Slow tap', double.infinity),
+    ('multiTapDelay', 'Multi-tap gap', double.infinity),
+    ('stickDeadzoneMin', 'Stick dead min', 1.0),
+    ('stickDeadzoneMax', 'Stick dead max', 1.0),
+    ('axisDeadzoneMin', 'Axis dead min', 1.0),
+    ('axisDeadzoneMax', 'Axis dead max', 1.0),
   ];
 
   @override
@@ -1332,7 +1337,7 @@ class _SettingsProperties extends StatelessWidget {
               EditorIconButton(
                 icon: Icons.add,
                 tooltip: 'More',
-                onTap: players.maxPlayers >= 8
+                onTap: players.maxPlayers >= maxPlayers
                     ? null
                     : () => setPlayers(
                         'Players',
@@ -1391,14 +1396,22 @@ class _SettingsProperties extends StatelessWidget {
           style: InputEditorTheme.label,
         ),
         const SizedBox(height: 6),
-        for (final (key, label) in _settingFields)
+        for (final (key, label, most) in _settingFields)
           _Field(
             label,
             EditorTextField(
               value: '${s.asset.settings.toJson()[key]}',
               onCommit: (text) {
+                // NaN and Infinity parse, and no file can hold them.
                 final n = double.tryParse(text.trim());
-                if (n == null) return;
+                if (n == null || !n.isFinite || n < 0 || n > most) {
+                  s.say(
+                    most.isFinite
+                        ? '$label is a number from 0 to ${most.round()}.'
+                        : '$label is a number of seconds, 0 or more.',
+                  );
+                  return;
+                }
                 final json = s.asset.settings.toJson()..[key] = n;
                 s.edit(
                   label,

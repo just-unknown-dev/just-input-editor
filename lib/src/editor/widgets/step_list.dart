@@ -168,6 +168,48 @@ class ParamField extends StatelessWidget {
     return '${info.defaultValue ?? ''}';
   }
 
+  /// [text] as this setting's number: null for anything that is not a
+  /// finite number (NaN and Infinity parse, and no file can hold them),
+  /// otherwise held within the setting's range.
+  num? _number(String text) {
+    final n = num.tryParse(text);
+    if (n == null || !n.isFinite) return null;
+    final (min, max) = (info.min, info.max);
+    if (min != null && n < min) return min;
+    if (max != null && n > max) return max;
+    return n;
+  }
+
+  // A hand-edited file may hold any number, flag or text in any setting:
+  // what does not fit the setting's kind shows as unset, or as itself.
+  Widget _choice() {
+    final choices = info.choices;
+    final d = info.defaultValue;
+    final fallback = d is String ? d : (choices.isEmpty ? null : choices.first);
+    final current = value == null ? fallback : '$value';
+    final known = current != null && choices.contains(current);
+    return DropdownButton<String>(
+      value: current,
+      isDense: true,
+      isExpanded: true,
+      dropdownColor: InputEditorTheme.panelRaised,
+      style: InputEditorTheme.body,
+      underline: const SizedBox.shrink(),
+      items: [
+        for (final c in choices) DropdownMenuItem(value: c, child: Text(c)),
+        if (current != null && !known)
+          DropdownMenuItem(
+            value: current,
+            child: Text(
+              '$current (unknown)',
+              style: TextStyle(color: InputEditorTheme.warning),
+            ),
+          ),
+      ],
+      onChanged: (v) => onChanged(v),
+    );
+  }
+
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.only(top: 3),
@@ -185,36 +227,24 @@ class ParamField extends StatelessWidget {
               onCommit: (text) {
                 final t = text.trim();
                 if (t.isEmpty) return onChanged(null);
-                final n = num.tryParse(t);
+                final n = _number(t);
                 if (n != null) onChanged(n);
               },
             ),
             ParamKind.flag => Align(
               alignment: Alignment.centerLeft,
               child: Checkbox(
-                value:
-                    (value as bool?) ?? (info.defaultValue as bool? ?? false),
+                value: switch ((value, info.defaultValue)) {
+                  (final bool v, _) => v,
+                  (_, final bool d) => d,
+                  _ => false,
+                },
                 activeColor: InputEditorTheme.accent,
                 checkColor: InputEditorTheme.background,
                 onChanged: (v) => onChanged(v),
               ),
             ),
-            ParamKind.choice => DropdownButton<String>(
-              value:
-                  (value as String?) ??
-                  (info.defaultValue as String?) ??
-                  info.choices.first,
-              isDense: true,
-              isExpanded: true,
-              dropdownColor: InputEditorTheme.panelRaised,
-              style: InputEditorTheme.body,
-              underline: const SizedBox.shrink(),
-              items: [
-                for (final c in info.choices)
-                  DropdownMenuItem(value: c, child: Text(c)),
-              ],
-              onChanged: (v) => onChanged(v),
-            ),
+            ParamKind.choice => _choice(),
           },
         ),
       ],

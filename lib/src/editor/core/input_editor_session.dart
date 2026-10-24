@@ -2,17 +2,23 @@ import 'package:flutter/foundation.dart';
 
 import 'package:just_inputs/just_inputs.dart';
 
+import 'input_references.dart';
+
 /// What is selected in the Input Actions editor.
 sealed class EditorSelection {
   const EditorSelection();
 }
 
+/// Nothing: the Properties panel shows how to begin.
 final class NoSelection extends EditorSelection {
   const NoSelection();
 }
 
+/// An action, by id.
 final class ActionSelection extends EditorSelection {
   const ActionSelection(this.id);
+
+  /// The action's id.
   final String id;
 
   @override
@@ -24,6 +30,8 @@ final class ActionSelection extends EditorSelection {
 /// A binding, or one part of a composite.
 final class BindingSelection extends EditorSelection {
   const BindingSelection(this.id);
+
+  /// The binding's or the part's id.
   final String id;
 
   @override
@@ -32,8 +40,11 @@ final class BindingSelection extends EditorSelection {
   int get hashCode => id.hashCode;
 }
 
+/// An on-screen control, by id.
 final class OnScreenSelection extends EditorSelection {
   const OnScreenSelection(this.id);
+
+  /// The control's id — what bindings name: `<OnScreen>/id`.
   final String id;
 
   @override
@@ -43,8 +54,11 @@ final class OnScreenSelection extends EditorSelection {
   int get hashCode => id.hashCode;
 }
 
+/// A control scheme, by name.
 final class SchemeSelection extends EditorSelection {
   const SchemeSelection(this.name);
+
+  /// The scheme's name.
   final String name;
 
   @override
@@ -84,32 +98,61 @@ class InputEditorSession extends ChangeNotifier {
   static const int maxUndo = 200;
 
   InputActionAsset _asset;
+
+  /// The asset as it is now.
   InputActionAsset get asset => _asset;
 
   String _savedText;
   bool? _dirty;
 
   /// Something changed since it was loaded or last saved.
-  bool get isDirty => _dirty ??= _asset.encode() != _savedText;
+  ///
+  /// Through a drag that has changed something it is so without comparing:
+  /// the file is not written out again on every move.
+  bool get isDirty {
+    if (_gesture > 0 && _gestureRecorded) return true;
+    return _dirty ??= _asset.encode() != _savedText;
+  }
+
+  /// Whether [asset] is what was loaded or last saved — a file that changed
+  /// on disk only because this session wrote it.
+  bool matchesSaved(InputActionAsset asset) => asset.encode() == _savedText;
 
   final List<_Step> _undo = [];
   final List<_Step> _redo = [];
 
+  /// Whether there is a step to [undo].
   bool get canUndo => _undo.isNotEmpty;
+
+  /// Whether there is a step to [redo].
   bool get canRedo => _redo.isNotEmpty;
+
+  /// What [undo] would take back, for its tooltip.
   String? get undoLabel => _undo.lastOrNull?.label;
+
+  /// What [redo] would do again.
   String? get redoLabel => _redo.lastOrNull?.label;
 
   int _gesture = 0;
   bool _gestureRecorded = false;
+
+  /// Whether a drag is under way — [beginGesture] without its
+  /// [endGesture] yet. Editing keys wait for it: a delete mid-drag would
+  /// end up inside the drag's undo step.
+  bool get inGesture => _gesture > 0;
 
   /// Everything until [endGesture] is one undo step — a drag.
   void beginGesture() {
     if (_gesture++ == 0) _gestureRecorded = false;
   }
 
+  /// The drag is over; listeners hear of it once, for what they put off
+  /// while it went on.
   void endGesture() {
-    if (_gesture > 0) _gesture--;
+    if (_gesture == 0 || _disposed) return;
+    if (--_gesture > 0) return;
+    _dirty = null;
+    notifyListeners();
   }
 
   /// Makes [next] the asset, as one undoable step called [label].
@@ -140,13 +183,17 @@ class InputEditorSession extends ChangeNotifier {
     return made;
   }
 
+  /// Takes back the last step; nothing when there is none.
   void undo() {
+    if (_undo.isEmpty) return;
     final step = _undo.removeLast();
     _redo.add(_Step(step.label, _asset));
     _set(step.asset);
   }
 
+  /// Does the last undone step again; nothing when there is none.
   void redo() {
+    if (_redo.isEmpty) return;
     final step = _redo.removeLast();
     _undo.add(_Step(step.label, _asset));
     _set(step.asset);
@@ -163,15 +210,18 @@ class InputEditorSession extends ChangeNotifier {
     _set(asset);
   }
 
-  /// What is on disk is what is here now.
-  void markSaved({String? path}) {
+  /// What is on disk is [asset] — the one written, which by the time the
+  /// write is done may no longer be the one here (a drag went on); this one
+  /// when not given.
+  void markSaved({String? path, InputActionAsset? asset}) {
     this.path = path ?? this.path;
-    _savedText = _asset.encode();
-    _dirty = false;
+    _savedText = (asset ?? _asset).encode();
+    _dirty = null;
     notifyListeners();
   }
 
   void _set(InputActionAsset next) {
+    _schemeFilter = _followFilter(_asset, next);
     _asset = next;
     _dirty = null;
     _issues = null;
@@ -180,9 +230,37 @@ class InputEditorSession extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// The scheme filter once [next] replaces [previous]: the same group, or
+  /// the one its scheme was given; none when the scheme has gone.
+  String? _followFilter(InputActionAsset previous, InputActionAsset next) {
+    final group = _schemeFilter;
+    if (group == null || next.schemeWithGroup(group) != null) return group;
+    final scheme = previous.schemeWithGroup(group);
+    return scheme == null ? null : next.schemeNamed(scheme.name)?.group;
+  }
+
+  // --- Breaking changes -----------------------------------------------------
+
+  /// Asked before an edit that takes a name away from the game — a rename,
+  /// a move or a delete of an action or a map — with what the edit is
+  /// called and what it takes away: true to go on. The editor sets it to
+  /// look through the project and ask when something names it.
+  Future<bool> Function(String change, InputReferenceQuery query)?
+  confirmBreaking;
+
+  /// Whether [change] may go ahead: what [confirmBreaking] says, or yes
+  /// when nothing asks.
+  Future<bool> mayBreak(String change, InputReferenceQuery query) async {
+    final ask = confirmBreaking;
+    if (ask == null || query.isEmpty) return true;
+    return ask(change, query);
+  }
+
   // --- Selection ----------------------------------------------------------
 
   EditorSelection _selection = const NoSelection();
+
+  /// What the Properties panel shows and the pictures outline.
   EditorSelection get selection => _selection;
 
   String? _selectedMapId;
@@ -190,6 +268,8 @@ class InputEditorSession extends ChangeNotifier {
   /// The map whose actions are listed.
   String? get selectedMapId => _selectedMapId;
 
+  /// Shows the map [id]'s actions; a selected action or binding of another
+  /// map is let go.
   void selectMap(String? id) {
     if (id == _selectedMapId) return;
     _selectedMapId = id;
@@ -199,6 +279,7 @@ class InputEditorSession extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Selects [selection], showing its map when it is in one.
   void select(EditorSelection selection) {
     if (selection == _selection) return;
     _selection = selection;
@@ -261,7 +342,11 @@ class InputEditorSession extends ChangeNotifier {
   List<AssetIssue>? _issues;
   List<BindingConflict>? _conflicts;
 
+  /// What `validateAsset` finds wrong with the asset, worked out once per
+  /// change.
   List<AssetIssue> get issues => _issues ??= validateAsset(_asset);
+
+  /// Controls two actions of a map share, in the [schemeFilter]'s scheme.
 
   List<BindingConflict> get conflicts =>
       _conflicts ??= findBindingConflicts(_asset, group: _schemeFilter);
@@ -279,6 +364,7 @@ class InputEditorSession extends ChangeNotifier {
 
   // --- Messages -------------------------------------------------------------
 
+  /// The last thing [say] said, for the status line.
   final ValueNotifier<String?> message = ValueNotifier(null);
 
   /// A short note for the status line.
@@ -286,7 +372,11 @@ class InputEditorSession extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     message.dispose();
     super.dispose();
   }
+
+  /// Set by [dispose]: a drag torn down with the editor ends without a word.
+  bool _disposed = false;
 }

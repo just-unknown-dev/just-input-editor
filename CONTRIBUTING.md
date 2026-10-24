@@ -57,7 +57,7 @@ For a feature, open an issue labelled **`enhancement`** that describes the probl
 | Dart | 3.12.2 |
 | Flutter | A stable release that ships Dart 3.12.2 or later |
 
-`just_game_engine` and `just_inputs` also need Flutter 3.44.0 or later.
+`just_editor_core` and `just_game_engine` need Flutter 3.47.1 or later (the first stable where Flutter GPU can be switched on in Windows and Linux builds), so this package does too.
 
 There is no app to run here: you work on the package and its tests. To try a change in the engine editor, add the package to a game's `dev_dependencies` with a `path:` to your clone, and register `InputEditorModule()` as the [README](README.md) shows.
 
@@ -74,7 +74,7 @@ If you're working from the Just engine monorepo, run every command from `plugins
 
 ## Working Against Unpublished Dependencies
 
-The package depends on four `just_*` packages: `just_inputs`, the core it edits; `just_gamepads`, for a pad's type in the gamepad view; and `just_game_engine` and `just_game_engine_editor`, the editor it plugs into. When a change needs an unreleased version of one, or `flutter pub get` cannot find a version, check it out next to this repository and point this package at it with a `pubspec_overrides.yaml` in the repository root. The paths below use the package names as folder names, as the monorepo does:
+The package depends on three `just_*` packages: `just_inputs`, the core it edits; `just_gamepads`, for a pad's type in the gamepad view; and `just_editor_core`, the editor's module contract it plugs in through. Its tests also use `just_game_engine` (a dev dependency), to see a save reach a running engine. When a change needs an unreleased version of one, or `flutter pub get` cannot find a version, check it out next to this repository and point this package at it with a `pubspec_overrides.yaml` in the repository root. The paths below use the package names as folder names, as the monorepo does:
 
 ```yaml
 # pubspec_overrides.yaml: local only, never commit it.
@@ -83,17 +83,17 @@ dependency_overrides:
     path: ../just_inputs
   just_gamepads:
     path: ../just_gamepads
+  just_editor_core:
+    path: ../just_editor_core
   just_game_engine:
     path: ../just_game_engine
-  just_game_engine_editor:
-    path: ../just_game_engine_editor
 ```
 
 If one of their own dependencies is unpublished too (`just_game_engine` depends on `just_physics_engine`, `just_audio_engine`, `just_game_engine_formats` and others), add an entry for it the same way. Then run `flutter pub get`. Delete the file (or the entry) and run `flutter pub get` again to go back to the published versions.
 
 Do not change `pubspec.yaml` to a path dependency: the Asset Store refuses a package that depends on anything by path or git. If your pull request needs a version that is not published yet, say so in the pull request: this package can only be released after it.
 
-No other `just_*` package depends on this one. Games add it as a dev dependency, because none of it may ship (the platformer template does), and the Asset Store registers its module from `just_store.json`. If you change `InputEditorModule`'s constructor or `InputEditorModule.defaultAssetPath`, say so in the pull request.
+No other `just_*` package depends on this one. Games get it from the Asset Store, which puts it in the project's `plugins/` folder, links it, and registers its module from `just_store.json`; none of it may ship. If you change `InputEditorModule`'s constructor or `InputEditorModule.defaultAssetPath`, say so in the pull request.
 
 ---
 
@@ -102,7 +102,7 @@ No other `just_*` package depends on this one. Games add it as a dev dependency,
 | Path | Contents |
 |------|----------|
 | `lib/just_input_editor.dart` | The one library. Everything public is exported here |
-| `lib/src/editor/core/` | No widgets: `InputEditorSession` (the asset, undo, selection, problems), `AssetEdits` (every edit), `InputAssetStore` with `FileInputAssetStore` and `MemoryInputAssetStore`, and `starterInputAsset` |
+| `lib/src/editor/core/` | No widgets: `InputEditorSession` (the asset, undo, selection, problems), `AssetEdits` (every edit), `CheckedEdits` (renames, moves and deletes that check names and ask first), `InputReferenceFinder` with `FileInputReferenceFinder`, `InputAssetStore` with `FileInputAssetStore` and `MemoryInputAssetStore`, `parseInputAsset`, and `starterInputAsset` |
 | `lib/src/editor/widgets/` | `InputEditor` and its parts: `MapsColumn`, `ActionsTree`, `PropertiesPanel` with `StepListEditor`, and `BottomPanel` with `KeyboardView`, `GamepadView`, `TouchLayoutView` and `LiveTestView`; `EditorHarness`; `InputEditorTheme` and `EditorTextField` |
 | `lib/src/input_editor_module.dart` | `InputEditorModule`: the workspace, the play-toolbar button, the Assets dock actions and live apply |
 | `just_store.json` | The Asset Store manifest: an `editor-extension` whose module is `InputEditorModule`, with `editorOnlyLibraries: ["*"]`, so none of it may reach a release build |
@@ -111,12 +111,12 @@ No other `just_*` package depends on this one. Games add it as a dev dependency,
 A few rules hold the package together. Keep them:
 
 - **Every change is one undo step.** Widgets change the asset only through `InputEditorSession.edit` (or `apply`, `create`), and a drag between `beginGesture` and `endGesture` is one step too. History keeps whole assets, up to `InputEditorSession.maxUndo`. Put a new edit in `AssetEdits`, as a pure function (an asset in, a new asset out, no widgets, no undo), so it can be tested alone.
-- **The file format belongs to `just_inputs`.** The editor reads with `InputActionAsset.parse` and saves with `InputActionAsset.encode()`; it never writes JSON of its own. A new field is added to `just_inputs` first, then gets its control here.
-- **Ids come from the asset.** New maps, actions and bindings take their ids from `InputActionAsset.takeId`, and a duplicate gets fresh ids all the way down. Players' saved rebinds point at binding ids, so never reuse or renumber an id, or derive one from a position.
-- **References follow renames.** Join actions are saved as `map/action`, bindings name scheme groups, and on-screen bindings name a control's id. `renameMap`, `renameAction`, `updateScheme`, `deleteScheme` and `updateOnScreen` rewrite what named the old one, and deleting a map or action drops its join action. A new edit that renames or removes something needs the same, and a test in `test/editor_core_test.dart`.
-- **The editor has its own input.** Listen and the live test run on `EditorHarness`, a private `InputService` that runs the asset as it is being edited. They never touch the game's. Only a save of the game's asset (`InputEditorModule.assetPath`) reaches the running engine, through `engine.input.loadAsset`.
+- **The file format belongs to `just_inputs`.** The editor reads with `parseInputAsset` (`InputActionAsset.parse`, every failure a `FormatException`) and saves with `InputActionAsset.encode()`; it never writes JSON of its own. A new field is added to `just_inputs` first, then gets its control here.
+- **Ids come from the asset.** New maps, actions and bindings take their ids from `InputActionAsset.takeId`, and a duplicate gets fresh ids all the way down. Players' saved rebinds point at binding ids, so never reuse or renumber an id, or derive one from a position. The one exception is `AssetEdits.repairIds`, which the editor runs when a file opens: a `nextId` behind the ids moves past them, and an id used twice (a merge) gets a new one where it comes again.
+- **References follow renames.** Join actions are saved as `map/action`, bindings name scheme groups, and on-screen bindings name a control's id. `renameMap`, `renameAction`, `updateScheme`, `deleteScheme` and `updateOnScreen` rewrite what named the old one, and deleting a map or action drops its join action. A new edit that renames or removes something needs the same, and a test in `test/editor_core_test.dart`. Names outside the asset (scene fields, game code) are never rewritten: a rename, move or delete of an action or a map goes through `CheckedEdits`, which shows what `InputReferenceFinder` finds first.
+- **The editor has its own input.** Listen and the live test run on `EditorHarness`, a private `InputService` that runs the asset as it is being edited. They never touch the game's. Only a save of the game's asset (`InputEditorModule.assetPath`) reaches the running engine, through `InputEditorModule.apply`, which keeps a save that takes an action away until a play-test stops.
 - **A save never leaves half a file.** `FileInputAssetStore.save` writes `<file>.saving` and renames it over the file. Paths are project-relative with forward slashes, and `PackageAssetPaths` finds them on disk.
-- **`InputEditor` takes everything from its host** through its constructor: the store, the path, `onSaved`, `setCloseGuard`, the gamepads. That is how it runs inside the engine editor and on its own. Engine-editor code belongs in `InputEditorModule`, which also sets `InputEditorTheme.palette` from `EditorTheme.current` each time it builds the workspace.
+- **`InputEditor` takes everything from its host** through its constructor: the store, the path, `onSaved`, `setCloseGuard`, the gamepads, the reference finder. That is how it runs inside the engine editor and on its own. Engine-editor code belongs in `InputEditorModule`, which also sets `InputEditorTheme.palette` from `EditorTheme.current` each time it builds the workspace.
 - **Interactions and processors come from `just_inputs`' registries**, `InputInteractions.all` and `InputProcessors.all`, and each setting's field is drawn from the entry's `ParamInfo` list. A new one registered there shows up here with no change. Composite kinds are listed by action type in `actions_tree.dart`, from `CompositeKinds`.
 - **The store's names are fixed.** `just_store.json` names `InputEditorModule` in `package:just_input_editor/just_input_editor.dart`, and the store's generated `store_modules.g.dart` calls `InputEditorModule()`. Keep the class, the library and a constructor that needs no arguments. Keep `version` in `just_store.json` equal to the one in `pubspec.yaml`: the Asset Store refuses a package whose versions differ.
 

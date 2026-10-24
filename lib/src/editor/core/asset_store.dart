@@ -6,12 +6,31 @@ import 'package:just_inputs/just_inputs.dart';
 
 /// Where the editor reads and writes input assets.
 abstract interface class InputAssetStore {
+  /// Whether there is a file at [path] (project-relative).
   Future<bool> exists(String path);
 
   /// Throws [FormatException] for a file that is not an input asset.
   Future<InputActionAsset> load(String path);
 
+  /// Writes [asset] to [path], making its folder if need be.
   Future<void> save(String path, InputActionAsset asset);
+}
+
+/// [text] read as an input asset, as [InputActionAsset.parse] reads it —
+/// except that anything wrong with it is a [FormatException]: a field of
+/// the wrong kind (`"name": 3`), a name no type has (`"type": "vector"`) or
+/// a list too short, which the parser meets as a cast or a lookup failing.
+InputActionAsset parseInputAsset(String text) {
+  try {
+    return InputActionAsset.parse(text);
+  } on FormatException {
+    rethrow;
+  } on Object catch (e) {
+    throw FormatException(
+      'Something in it has the wrong kind of value: '
+      '${e is ArgumentError ? e.message ?? e : e}',
+    );
+  }
 }
 
 /// Files under a project [root], paths project-relative with forward
@@ -19,6 +38,7 @@ abstract interface class InputAssetStore {
 final class FileInputAssetStore implements InputAssetStore {
   FileInputAssetStore(this.root);
 
+  /// The project folder the paths are under.
   final String root;
 
   File _file(String path) => PackageAssetPaths.of(root).file(path);
@@ -28,7 +48,7 @@ final class FileInputAssetStore implements InputAssetStore {
 
   @override
   Future<InputActionAsset> load(String path) async =>
-      InputActionAsset.parse(await _file(path).readAsString());
+      parseInputAsset(await _file(path).readAsString());
 
   /// Writes beside the file, then swaps it in: a save interrupted half way
   /// leaves the old file whole.
@@ -56,7 +76,7 @@ final class MemoryInputAssetStore implements InputAssetStore {
   Future<InputActionAsset> load(String path) async {
     final text = files[path];
     if (text == null) throw FileSystemException('No such file', path);
-    return InputActionAsset.parse(text);
+    return parseInputAsset(text);
   }
 
   @override

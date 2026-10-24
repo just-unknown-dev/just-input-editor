@@ -3,6 +3,7 @@ import 'package:just_editor_core/just_editor_core.dart' show EditorKeys;
 
 import 'package:just_inputs/just_inputs.dart';
 import '../core/asset_edits.dart';
+import '../core/checked_edits.dart';
 import '../core/input_editor_session.dart';
 import 'editor_theme.dart';
 
@@ -127,12 +128,7 @@ class _ActionsTreeState extends State<ActionsTree> {
           initial: action.name,
           action: 'Rename',
         );
-        if (name != null && name.trim().isNotEmpty) {
-          s.edit(
-            'Rename action',
-            (a) => AssetEdits.renameAction(a, action.id, name.trim()),
-          );
-        }
+        if (name != null) await CheckedEdits.renameAction(s, action.id, name);
       case 'duplicate':
         final id = s.create(
           'Duplicate action',
@@ -140,7 +136,7 @@ class _ActionsTreeState extends State<ActionsTree> {
         );
         s.select(ActionSelection(id));
       case 'delete':
-        s.edit('Delete action', (a) => AssetEdits.deleteAction(a, action.id));
+        await CheckedEdits.deleteAction(s, action.id);
     }
   }
 
@@ -210,14 +206,10 @@ class _ActionsTreeState extends State<ActionsTree> {
             onTap: () => s.select(ActionSelection(action.id)),
             onMenu: (at) => _actionMenu(context, at, action),
             onAdd: (at) => _addBindingMenu(context, at, action),
-            onDropBefore: (id) {
-              final index = map.actions.indexWhere((x) => x.id == action.id);
-              s.edit(
-                'Move action',
-                (a) =>
-                    AssetEdits.moveAction(a, id, toMapId: map.id, index: index),
-              );
-            },
+            onDropBefore: (id) => s.edit(
+              'Move action',
+              (a) => AssetEdits.moveActionBefore(a, id, action.id),
+            ),
           ),
         );
         if (collapsed) continue;
