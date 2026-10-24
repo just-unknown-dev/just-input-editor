@@ -4,6 +4,8 @@ version: 0.1.0
 homepage: https://engine.justunknown.com/
 repository: https://github.com/just-unknown-dev/just-input-editor
 issue_tracker: https://github.com/just-unknown-dev/just-input-editor/issues
+# A plugin: shared through the Asset Store from GitHub, never pub.dev.
+publish_to: none
 
 environment:
   # just_inputs needs 3.12 (private named initializing formals).
@@ -24,7 +26,7 @@ dependencies:
 
   # The editor this plugs into, as a module. Design-time only: the whole
   # package is, so a game never imports any of it.
-  just_game_engine: ^2.0.0
+  just_game_engine: ^2.0.0-dev.2
   just_editor_core: ^0.1.0-dev.1
 
 dev_dependencies:

@@ -1,8 +1,10 @@
 {
-  "category": "editors",
-  "dependencies": {
-    "just_game_engine_editor": "^0.1.0-dev.1"
+  "author": {
+    "name": "Just Unknown",
+    "url": "https://justunknown.com"
   },
+  "category": "editors",
+  "description": "The visual side of just_inputs: action maps, actions and bindings, with keyboard, gamepad and touch views and a live test that shows what fires as you press.",
   "editor": {
     "editorOnlyLibraries": [
       "*"
@@ -17,10 +19,26 @@
   },
   "id": "just_input_editor",
   "kind": "editor-extension",
+  "license": {
+    "file": "LICENSE",
+    "spdx": "BSD-3-Clause"
+  },
   "name": "Input Actions",
+  "previews": [
+    "store/card.png"
+  ],
   "requires": {
-    "just_game_engine": "^2.0.0"
+    "just_game_engine": "^2.0.0-dev.2",
+    "just_game_engine_editor": "^0.1.0-dev.1"
   },
   "schema": 1,
+  "stage": "beta",
+  "summary": "Map keyboard, gamepad and touch input to your game's actions.",
+  "tags": [
+    "input",
+    "gamepad",
+    "keyboard",
+    "touch"
+  ],
   "version": "0.1.0"
 }
