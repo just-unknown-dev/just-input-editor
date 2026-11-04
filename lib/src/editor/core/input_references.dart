@@ -71,7 +71,7 @@ final class InputReference {
   /// Project-relative, with forward slashes.
   final String file;
 
-  /// Where in it: `Player · ThirdPersonController.jumpAction`, `line 12`.
+  /// Where in it: `Player · ThirdPersonControllerComponent.jumpAction`, `line 12`.
   final String where;
 
   /// The name or path found there.

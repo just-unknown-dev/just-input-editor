@@ -240,7 +240,7 @@ void main() {
             'name': 'Player',
             'components': [
               {
-                'type': 'ThirdPersonController',
+                'type': 'ThirdPersonControllerComponent',
                 'fields': {'jumpAction': 'jump', 'moveAction': 'move'},
               },
               {
@@ -282,7 +282,7 @@ void main() {
         );
         expect(found.map((r) => '${r.file} ${r.where} ${r.value}'), [
           'assets/scenes/level.scene.json '
-              'Player · ThirdPersonController.jumpAction jump',
+              'Player · ThirdPersonControllerComponent.jumpAction jump',
           'lib/game/actions.dart line 1 jump',
           'lib/game/actions.dart line 2 player/jump',
         ]);

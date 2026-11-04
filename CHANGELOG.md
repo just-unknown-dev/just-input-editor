@@ -1,3 +1,7 @@
+## Unreleased
+
+- Requires just_game_engine ^2.0.0-dev.4.
+
 ## 0.1.0-beta.1
 
 First version: the Input Actions editor, the visual side of `just_inputs`. The editor moved here from `just_inputs`, and its module from the platformer template. It builds on `just_editor_core`, the editor's module contract, and needs nothing else of the editor.

@@ -36,7 +36,7 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^6.0.0
   # The module's test runs a real engine, to see a save change its input.
-  just_game_engine: ^2.0.0-dev.2
+  just_game_engine: ^2.0.0-dev.4
 
 flutter:
   uses-material-design: true
