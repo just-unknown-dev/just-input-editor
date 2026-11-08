@@ -1,5 +1,10 @@
 include: package:flutter_lints/flutter.yaml
 
+linter:
+  rules:
+    # Every public API has a doc comment.
+    - public_member_api_docs
+
 analyzer:
   exclude:
     - build/**

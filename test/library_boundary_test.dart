@@ -1,6 +1,7 @@
 // The editor is the visual side of just_inputs: it reads the core through
 // its public library only, so the core can change its insides freely. This
-// walks every import the editor's library reaches.
+// walks every import the editor's library reaches. (That every file under
+// lib/ is reached, or internal, is library_layout_test's.)
 
 import 'dart:io';
 
@@ -41,17 +42,6 @@ final _directive = RegExp(
 }
 
 void main() {
-  test('the library reaches every file in lib — nothing is left over', () {
-    final (files, _) = reachable('lib/just_input_editor.dart');
-    final all = {
-      for (final f in Directory('lib').listSync(recursive: true))
-        if (f is File && f.path.endsWith('.dart'))
-          f.absolute.uri.normalizePath().toFilePath(),
-    };
-    expect(all.length, greaterThan(15), reason: 'the walk itself works');
-    expect(all.difference(files), isEmpty);
-  });
-
   test('just_inputs is read through its public library only', () {
     final (_, packages) = reachable('lib/just_input_editor.dart');
     final inputs = packages.where((p) => p.startsWith('package:just_inputs/'));

@@ -8,13 +8,6 @@
 /// controls are a `.input.json` asset the engine's `just_inputs` runs.
 library;
 
-export 'src/editor/core/asset_edits.dart';
-export 'src/editor/core/asset_store.dart';
-export 'src/editor/core/input_editor_session.dart';
-export 'src/editor/core/input_references.dart';
-export 'src/editor/core/starter_asset.dart';
-export 'src/editor/widgets/editor_harness.dart';
-export 'src/editor/widgets/editor_theme.dart'
-    show InputEditorPalette, InputEditorTheme;
-export 'src/editor/widgets/input_editor.dart';
-export 'src/input_editor_module.dart';
+export 'src/asset/asset.dart';
+export 'src/editor/editor.dart';
+export 'src/session/session.dart';
